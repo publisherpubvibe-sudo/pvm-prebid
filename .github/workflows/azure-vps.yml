@@ -7,34 +7,49 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Enable RDP & Set User Password
+      - name: Enable RDP and Configure Firewall
+        shell: powershell
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          net user runneradmin MySecretPass123! /add
-          net localgroup administrators runneradmin /add
+          
+          # Set password for runneradmin directly via PowerShell (No Y/N prompt)
+          $AdminUser = [adsi]"WinNT://./runneradmin,user"
+          $AdminUser.SetPassword("P@ssword12345")
+          $AdminUser.SetInfo()
 
       - name: Download & Setup Ngrok
+        shell: powershell
         env:
           NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
         run: |
+          if (-not $env:NGROK_AUTH_TOKEN) {
+              Write-Error "NGROK_AUTH_TOKEN Secret is missing in GitHub repository settings!"
+              exit 1
+          }
           Invoke-WebRequest -Uri "https://bin.equinox.io/c/b4PvuBzR0eY/ngrok-v1.1.1-windows-amd64.zip" -OutFile "ngrok.zip"
-          Expand-Archive -Path "ngrok.zip" -DestinationPath "."
+          Expand-Archive -Path "ngrok.zip" -DestinationPath "." -Force
           .\ngrok.exe authtoken $env:NGROK_AUTH_TOKEN
           Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389"
 
       - name: Display RDP Connection Details
+        shell: powershell
         run: |
           Start-Sleep -Seconds 5
-          $response = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels"
-          $rdp_url = $response.tunnels[0].public_url.Replace("tcp://", "")
-          Write-Host "==========================================" -ForegroundColor Green
-          Write-Host "RDP Address  : $rdp_url" -ForegroundColor Yellow
-          Write-Host "Username     : runneradmin" -ForegroundColor Yellow
-          Write-Host "Password     : MySecretPass123!" -ForegroundColor Yellow
-          Write-Host "==========================================" -ForegroundColor Green
+          try {
+              $response = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels"
+              $rdp_url = $response.tunnels[0].public_url.Replace("tcp://", "")
+              Write-Host "==========================================" -ForegroundColor Green
+              Write-Host "RDP Address  : $rdp_url" -ForegroundColor Yellow
+              Write-Host "Username     : runneradmin" -ForegroundColor Yellow
+              Write-Host "Password     : P@ssword12345" -ForegroundColor Yellow
+              Write-Host "==========================================" -ForegroundColor Green
+          } catch {
+              Write-Error "Failed to fetch Ngrok tunnel address. Make sure NGROK_AUTH_TOKEN is correct."
+          }
 
       - name: Keep Runner Alive
+        shell: powershell
         run: |
           $i = 0
           while ($i -lt 360) {
