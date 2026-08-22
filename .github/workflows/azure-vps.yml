@@ -18,36 +18,31 @@ jobs:
           $AdminUser.SetPassword("P@ssword12345")
           $AdminUser.SetInfo()
 
-      - name: Download & Setup Ngrok via Choco
+      - name: Download & Setup Ngrok
         shell: powershell
         env:
           NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
         run: |
-          if (-not $env:NGROK_AUTH_TOKEN) {
-              Write-Error "NGROK_AUTH_TOKEN Secret is missing in GitHub repository settings!"
-              exit 1
-          }
-          # Install Ngrok using Chocolatey
           choco install ngrok -y
-          
-          # Configure Authtoken and Start Tunnel
-          ngrok authtoken $env:NGROK_AUTH_TOKEN
+          ngrok config add-authtoken $env:NGROK_AUTH_TOKEN
           Start-Process -FilePath "ngrok" -ArgumentList "tcp 3389"
 
       - name: Display RDP Connection Details
         shell: powershell
         run: |
-          Start-Sleep -Seconds 7
-          try {
-              $response = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels"
-              $rdp_url = $response.tunnels[0].public_url.Replace("tcp://", "")
+          Start-Sleep -Seconds 10
+          $tunnels = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels"
+          $url = $tunnels.tunnels.public_url | Select-Object -First 1
+          
+          if ($url) {
+              $cleanUrl = $url.Replace("tcp://", "")
               Write-Host "==========================================" -ForegroundColor Green
-              Write-Host "RDP Address  : $rdp_url" -ForegroundColor Yellow
+              Write-Host "RDP Address  : $cleanUrl" -ForegroundColor Yellow
               Write-Host "Username     : runneradmin" -ForegroundColor Yellow
               Write-Host "Password     : P@ssword12345" -ForegroundColor Yellow
               Write-Host "==========================================" -ForegroundColor Green
-          } catch {
-              Write-Error "Failed to fetch Ngrok tunnel address. Make sure NGROK_AUTH_TOKEN is valid."
+          } else {
+              Write-Host "Ngrok URL not ready yet. Check ngrok authtoken." -ForegroundColor Red
           }
 
       - name: Keep Runner Alive
