@@ -13,24 +13,27 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           
-          # User Password Set
+          # Admin password set
           $AdminUser = [adsi]"WinNT://./runneradmin,user"
           $AdminUser.SetPassword("P@ssword12345")
           $AdminUser.SetInfo()
 
-      - name: Start Pinggy RDP Tunnel
+      - name: Download & Start Cloudflare Tunnel
         shell: powershell
         run: |
-          # SSH client check & start tunnel
-          Start-Process ssh -ArgumentList "-o StrictHostKeyChecking=no -p 443 -R0:localhost:3389 qr@a.pinggy.io" -RedirectStandardOutput "pinggy.log" -NoNewWindow
-          Start-Sleep -Seconds 8
+          Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "cloudflared.exe"
+          Start-Process -FilePath ".\cloudflared.exe" -ArgumentList "access rdp --hostname rdp.trycloudflare.com --url localhost:3389" -NoNewWindow
+          Start-Process -FilePath ".\cloudflared.exe" -ArgumentList "tunnel --url rdp://localhost:3389" -RedirectStandardOutput "cloudflared.log" -RedirectStandardError "cloudflared.err" -NoNewWindow
+          
+          Start-Sleep -Seconds 10
           
           Write-Host "==================================================" -ForegroundColor Green
-          Write-Host "RDP connection setup complete!" -ForegroundColor Green
+          Write-Host "RDP Setup Complete via Cloudflare!" -ForegroundColor Green
           Write-Host "Username : runneradmin" -ForegroundColor Yellow
           Write-Host "Password : P@ssword12345" -ForegroundColor Yellow
           Write-Host "==================================================" -ForegroundColor Green
-          Get-Content pinggy.log | Select-String "tcp://"
+          
+          Get-Content cloudflared.err | Select-String "trycloudflare.com"
 
       - name: Keep Runner Alive
         shell: powershell
