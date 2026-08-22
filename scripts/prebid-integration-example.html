@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PubVibe SSP – Prebid.js Integration Example</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
+    h1   { color: #333; }
+    .ad-container { margin: 20px 0; }
+    .ad-label     { font-size: 11px; color: #999; text-align: center; margin-bottom: 4px; }
+    #div-pubvibe-300x250 { width: 300px; height: 250px; background: #e9e9e9; border: 1px dashed #ccc; }
+    #div-pubvibe-728x90  { width: 728px; height: 90px;  background: #e9e9e9; border: 1px dashed #ccc; }
+    pre  { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<h1>PubVibe SSP – Prebid.js Integration Example</h1>
+<p>This page demonstrates how to integrate the PubVibe SSP adapter into your website using Prebid.js.</p>
+
+<!-- ═══════════════════════════════════════════════════════════
+     Ad Slots
+     Replace YOUR-PUB-ID and zone IDs with your real values.
+ ═══════════════════════════════════════════════════════════ -->
+
+<div class="ad-container">
+  <div class="ad-label">Advertisement (300×250)</div>
+  <div id="div-pubvibe-300x250"></div>
+</div>
+
+<div class="ad-container">
+  <div class="ad-label">Advertisement (728×90)</div>
+  <div id="div-pubvibe-728x90"></div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     1. Load Prebid.js
+        In production replace "not-for-prod" with your own
+        Prebid.js build from https://docs.prebid.org/download.html
+        with the pubvibe adapter included.
+ ═══════════════════════════════════════════════════════════ -->
+<script async src="https://cdn.jsdelivr.net/npm/prebid.js@latest/dist/not-for-prod/prebid.js"></script>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     2. Prebid.js configuration + PubVibe SSP adapter setup
+ ═══════════════════════════════════════════════════════════ -->
+<script>
+  var pbjs = pbjs || {};
+  pbjs.que = pbjs.que || [];
+
+  // ── Ad Unit definitions ───────────────────────────────────────
+  // Each ad unit maps a div on the page to one or more bidders.
+  // For PubVibe SSP you need: pubId, zoneId, and region.
+  //
+  // Regional endpoint mapping:
+  //   useast → rtb-useast.trackifyy.com  (US East – New York)
+  //   uswest → rtb-uswest.trackifyy.com  (US West – Phoenix)
+  //   eu     → rtb-eu.trackifyy.com      (EU – Amsterdam)
+  //   apac   → rtb-apac.trackifyy.com    (APAC – Singapore)
+  // ─────────────────────────────────────────────────────────────
+  var adUnits = [
+    {
+      code: 'div-pubvibe-300x250',      // must match the div id above
+      mediaTypes: {
+        banner: {
+          sizes: [[300, 250], [300, 600]]
+        }
+      },
+      bids: [
+        {
+          bidder: 'pubvibe',
+          params: {
+            pubId:  'YOUR-PUB-ID',       // ← replace with your Publisher ID
+            zoneId: '362093',            // ← replace with your Zone ID
+            region: 'useast'            // useast | uswest | eu | apac
+          }
+        }
+      ]
+    },
+    {
+      code: 'div-pubvibe-728x90',
+      mediaTypes: {
+        banner: {
+          sizes: [[728, 90], [970, 90]]
+        }
+      },
+      bids: [
+        {
+          bidder: 'pubvibe',
+          params: {
+            pubId:  'YOUR-PUB-ID',
+            zoneId: '362093',
+            region: 'useast'
+          }
+        }
+      ]
+    }
+  ];
+
+  // ── Prebid.js initialisation ──────────────────────────────────
+  pbjs.que.push(function () {
+
+    // Global config
+    pbjs.setConfig({
+      debug: false,            // set true to see auction details in browser console
+      bidderTimeout: 2000,     // wait max 2 s for bids
+      priceGranularity: 'medium',
+      currency: { adServerCurrency: 'USD' },
+
+      // ── Server-Side Bidding via YOUR Prebid Server instance ──
+      // Uncomment and update the endpoint when your PBS is deployed.
+      //
+      // s2sConfig: {
+      //   accountId: 'YOUR-PUB-ID',
+      //   bidders:   ['pubvibe'],
+      //   enabled:   true,
+      //   endpoint: {
+      //     p1Consent: 'https://YOUR-PBS-DOMAIN/openrtb2/auction',
+      //     noConsent:  'https://YOUR-PBS-DOMAIN/openrtb2/auction'
+      //   }
+      // },
+    });
+
+    pbjs.addAdUnits(adUnits);
+
+    // Request bids from all defined bidders
+    pbjs.requestBids({
+      bidsBackHandler: initAdServer,
+      timeout: 2000
+    });
+  });
+
+  // ── Ad server callback (no header bidding wrapper / standalone) ──
+  function initAdServer() {
+    // Render the highest CPM bid for each slot directly
+    adUnits.forEach(function (unit) {
+      var bids = pbjs.getHighestCpmBids(unit.code);
+      if (bids && bids.length > 0) {
+        var winningBid = bids[0];
+        var el = document.getElementById(unit.code);
+        if (el) {
+          el.style.width  = winningBid.width  + 'px';
+          el.style.height = winningBid.height + 'px';
+          pbjs.renderAd(document, winningBid.adId);
+          console.log('[PubVibe] Rendered bid for ' + unit.code + ' at $' + winningBid.cpm.toFixed(4) + ' CPM');
+        }
+      } else {
+        console.log('[PubVibe] No bid for ' + unit.code + ' – showing fallback');
+        // Place your passback / house ad here
+      }
+    });
+  }
+</script>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     GOOGLE AD MANAGER (GPT) VERSION
+     ─────────────────────────────────────────────────────────
+     If you use Google Ad Manager as your primary ad server,
+     comment out the section above and use this block instead.
+ ═══════════════════════════════════════════════════════════ -->
+<!--
+<script async src="https://securepubads.g.doubleclick.net/tag/js/gpt.js"></script>
+<script>
+  var googletag = googletag || { cmd: [] };
+  var pbjs     = pbjs     || {};
+  pbjs.que     = pbjs.que || [];
+
+  var FAILSAFE_TIMEOUT = 2200; // ms – always call GPT even if Prebid is slow
+
+  // 1. Define GPT slots (disable initial load so Prebid controls timing)
+  googletag.cmd.push(function () {
+    googletag.defineSlot('/YOUR-NETWORK/banner-300x250', [300, 250], 'div-pubvibe-300x250')
+      .addService(googletag.pubads());
+    googletag.defineSlot('/YOUR-NETWORK/banner-728x90',  [728, 90],  'div-pubvibe-728x90')
+      .addService(googletag.pubads());
+
+    googletag.pubads().disableInitialLoad();
+    googletag.enableServices();
+
+    // Display slots (renders container, not the ad yet)
+    googletag.display('div-pubvibe-300x250');
+    googletag.display('div-pubvibe-728x90');
+  });
+
+  // 2. Failsafe – if Prebid takes too long, refresh GPT anyway
+  var failsafeTimer = window.setTimeout(function () {
+    sendAdserverRequest();
+  }, FAILSAFE_TIMEOUT);
+
+  function sendAdserverRequest() {
+    if (pbjs.adserverRequestSent) return;
+    pbjs.adserverRequestSent = true;
+    window.clearTimeout(failsafeTimer);
+    googletag.cmd.push(function () {
+      pbjs.setTargetingForGPTAsync();
+      googletag.pubads().refresh();
+    });
+  }
+
+  // 3. Prebid setup
+  pbjs.que.push(function () {
+    pbjs.setConfig({
+      debug: false,
+      bidderTimeout: 2000,
+      priceGranularity: 'medium',
+    });
+
+    pbjs.addAdUnits([
+      {
+        code: 'div-pubvibe-300x250',
+        mediaTypes: { banner: { sizes: [[300, 250]] } },
+        bids: [{ bidder: 'pubvibe', params: { pubId: 'YOUR-PUB-ID', zoneId: '362093', region: 'useast' } }]
+      },
+      {
+        code: 'div-pubvibe-728x90',
+        mediaTypes: { banner: { sizes: [[728, 90]] } },
+        bids: [{ bidder: 'pubvibe', params: { pubId: 'YOUR-PUB-ID', zoneId: '362093', region: 'useast' } }]
+      }
+    ]);
+
+    pbjs.requestBids({ bidsBackHandler: sendAdserverRequest });
+  });
+</script>
+-->
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     VIDEO INSTREAM (VAST)
+ ═══════════════════════════════════════════════════════════ -->
+<!--
+<script>
+  pbjs.que.push(function () {
+    pbjs.addAdUnits([{
+      code: 'video-player-1',
+      mediaTypes: {
+        video: {
+          context:     'instream',
+          playerSize:  [640, 480],
+          mimes:       ['video/mp4'],
+          protocols:   [1, 2, 3, 4, 5, 6],
+          playbackmethod: [2],
+          skip: 0
+        }
+      },
+      bids: [{
+        bidder: 'pubvibe',
+        params: { pubId: 'YOUR-PUB-ID', zoneId: '362093', region: 'useast' }
+      }]
+    }]);
+
+    pbjs.requestBids({
+      bidsBackHandler: function (bidObj) {
+        var bid = pbjs.getHighestCpmBids('video-player-1')[0];
+        if (bid) {
+          // Pass bid.vastUrl / bid.vastXml to your video player
+          console.log('Video VAST URL:', bid.vastUrl);
+        }
+      }
+    });
+  });
+</script>
+-->
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     ads.txt – REQUIRED
+     Add this line to https://yourwebsite.com/ads.txt:
+
+       trackifyy.com, YOUR-PUB-ID, DIRECT
+
+     Without ads.txt many DSPs will not bid on your inventory.
+ ═══════════════════════════════════════════════════════════ -->
+
+</body>
+</html>

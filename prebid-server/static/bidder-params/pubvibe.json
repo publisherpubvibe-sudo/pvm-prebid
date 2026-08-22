@@ -1,0 +1,21 @@
+{
+  "title": "PubVibe Adapter Params",
+  "description": "A schema which validates params accepted by the PubVibe SSP adapter",
+  "type": "object",
+  "properties": {
+    "zoneId": {
+      "type": "string",
+      "description": "The Zone ID from your PubVibe SSP account (e.g. 362093)"
+    },
+    "pubId": {
+      "type": "string",
+      "description": "Your Publisher ID in PubVibe"
+    },
+    "region": {
+      "type": "string",
+      "enum": ["useast", "uswest", "eu", "apac"],
+      "description": "Target regional endpoint: useast | uswest | eu | apac"
+    }
+  },
+  "required": ["zoneId", "pubId"]
+}

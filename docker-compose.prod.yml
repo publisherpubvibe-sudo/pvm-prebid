@@ -1,0 +1,108 @@
+version: "3.9"
+
+# ============================================================
+#  PubVibe Stack – PRODUCTION docker-compose
+#  Uses prebuilt images from GitHub Container Registry (GHCR)
+#  EC2 pe yeh file use hoti hai
+# ============================================================
+
+networks:
+  pubvibe-net:
+    driver: bridge
+
+volumes:
+  mongo-data:
+  backend-logs:
+
+services:
+
+  mongo:
+    image: mongo:7.0
+    container_name: pubvibe-mongo
+    restart: unless-stopped
+    networks: [pubvibe-net]
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: pubvibe
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  prebid-server:
+    image: ${GHCR_PREFIX}/pubvibe-prebid-server:latest
+    container_name: pubvibe-prebid
+    restart: unless-stopped
+    networks: [pubvibe-net]
+    ports:
+      - "8000:8000"
+      - "6060:6060"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/status"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: ${GHCR_PREFIX}/pubvibe-backend:latest
+    container_name: pubvibe-backend
+    restart: unless-stopped
+    networks: [pubvibe-net]
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+      - backend-logs:/app/logs
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      MONGO_URI: mongodb://mongo:27017/pubvibe
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      PREBID_SERVER_URL: http://prebid-server:8000
+      PUBVIBE_USEAST: https://rtb-useast.trackifyy.com/rtb
+      PUBVIBE_USWEST: https://rtb-uswest.trackifyy.com/rtb
+      PUBVIBE_EU: https://rtb-eu.trackifyy.com/rtb
+      PUBVIBE_APAC: https://rtb-apac.trackifyy.com/rtb
+      LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  admin-panel:
+    image: ${GHCR_PREFIX}/pubvibe-admin:latest
+    container_name: pubvibe-admin
+    restart: unless-stopped
+    networks: [pubvibe-net]
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  publisher-dash:
+    image: ${GHCR_PREFIX}/pubvibe-publisher:latest
+    container_name: pubvibe-publisher
+    restart: unless-stopped
+    networks: [pubvibe-net]
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: pubvibe-nginx
+    restart: unless-stopped
+    networks: [pubvibe-net]
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - admin-panel
+      - publisher-dash
+      - backend
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro

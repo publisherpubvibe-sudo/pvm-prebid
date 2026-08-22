@@ -1,0 +1,136 @@
+version: "3.9"
+
+# ============================================================
+#  PubVibe Prebid Stack – Docker Compose
+#  Services:
+#    mongo          – MongoDB (data store)
+#    prebid-server  – Prebid Server (Go) with PubVibe adapter
+#    backend        – Node.js REST API
+#    admin-panel    – React Admin Panel  (port 3000)
+#    publisher-dash – React Publisher Dashboard (port 3001)
+#    nginx          – Reverse proxy (port 80 / 443)
+# ============================================================
+
+networks:
+  pubvibe-net:
+    driver: bridge
+
+volumes:
+  mongo-data:
+  backend-logs:
+
+services:
+
+  # ── MongoDB ────────────────────────────────────────────────
+  mongo:
+    image: mongo:7.0
+    container_name: pubvibe-mongo
+    restart: unless-stopped
+    networks: [pubvibe-net]
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: pubvibe
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Prebid Server (Go) ─────────────────────────────────────
+  prebid-server:
+    build:
+      context: ./prebid-server
+      dockerfile: Dockerfile
+    container_name: pubvibe-prebid
+    restart: unless-stopped
+    networks: [pubvibe-net]
+    ports:
+      - "8000:8000"   # auction endpoint
+      - "6060:6060"   # admin / status
+      - "8080:8080"   # prometheus metrics
+    environment:
+      - PBS_EXTERNAL_URL=http://localhost:8000
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/status"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend API (Node.js) ──────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pubvibe-backend
+    restart: unless-stopped
+    networks: [pubvibe-net]
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+      - backend-logs:/app/logs
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      MONGO_URI: mongodb://mongo:27017/pubvibe
+      JWT_SECRET: ${JWT_SECRET:-CHANGE_ME_JWT_SECRET_32CHARS_MINIMUM}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-CHANGE_ME_REFRESH_SECRET_32CHARS}
+      PREBID_SERVER_URL: http://prebid-server:8000
+      PUBVIBE_USEAST: https://rtb-useast.trackifyy.com/rtb
+      PUBVIBE_USWEST: https://rtb-uswest.trackifyy.com/rtb
+      PUBVIBE_EU: https://rtb-eu.trackifyy.com/rtb
+      PUBVIBE_APAC: https://rtb-apac.trackifyy.com/rtb
+      LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Admin Panel (React) ────────────────────────────────────
+  admin-panel:
+    build:
+      context: ./admin-panel
+      dockerfile: Dockerfile
+    container_name: pubvibe-admin
+    restart: unless-stopped
+    networks: [pubvibe-net]
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      - REACT_APP_API_URL=/api
+      - REACT_APP_PBS_URL=http://localhost:8000
+
+  # ── Publisher Dashboard (React) ────────────────────────────
+  publisher-dash:
+    build:
+      context: ./publisher-dashboard
+      dockerfile: Dockerfile
+    container_name: pubvibe-publisher
+    restart: unless-stopped
+    networks: [pubvibe-net]
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      - REACT_APP_API_URL=/api
+      - REACT_APP_PBS_URL=http://localhost:8000
+
+  # ── Nginx Reverse Proxy ────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: pubvibe-nginx
+    restart: unless-stopped
+    networks: [pubvibe-net]
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - admin-panel
+      - publisher-dash
+      - backend
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro

@@ -1,0 +1,18 @@
+endpoint: "https://rtb-useast.trackifyy.com/rtb"
+maintainer:
+  email: "tech@pubvibe.com"
+gvlVendorID: 0
+capabilities:
+  app:
+    mediaTypes:
+      - banner
+      - video
+      - native
+  site:
+    mediaTypes:
+      - banner
+      - video
+      - native
+modifyingVastXmlAllowed: false
+debug:
+  allow: true

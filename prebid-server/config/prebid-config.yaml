@@ -1,0 +1,85 @@
+# ============================================================
+# PubVibe Prebid Server Configuration
+# ============================================================
+
+host: 0.0.0.0
+port: 8000
+admin_port: 6060
+
+# CORS – allow publisher pages to call this server
+cors_support_enabled: true
+
+# Auction settings
+auction_timeouts_ms:
+  default: 1000
+  max: 3000
+
+# Cache
+cache:
+  scheme: http
+  host: prebid-cache
+  query: uuid=%PBS_CACHE_UUID%
+
+# External URL (change to your domain in production)
+external_url: http://localhost:8000
+
+# Logging
+log:
+  level: info
+
+# Metrics
+metrics:
+  influxdb:
+    enabled: false
+  prometheus:
+    enabled: true
+    port: 8080
+    namespace: prebidserver
+    subsystem: pubvibe
+
+# Request limits
+max_request_size: 1048576   # 1 MB
+
+# Stored requests (filesystem)
+stored_requests:
+  filesystem:
+    enabled: true
+    directoryPath: ./stored_requests
+
+# Adapters – enable PubVibe SSP plus common bidders
+adapters:
+  pubvibe:
+    endpoint: https://rtb-useast.trackifyy.com/rtb
+    disabled: false
+
+  appnexus:
+    endpoint: http://ib.adnxs.com/openrtb2
+
+  rubicon:
+    endpoint: http://exapi-us-east.rubiconproject.com/a/api/exchange.json
+    xapi:
+      user: ""
+      password: ""
+
+  openx:
+    endpoint: http://rtb.openx.net/v2/prebid
+
+# Blacklisted apps/accounts (none by default)
+blacklisted_apps: []
+blacklisted_accts: []
+
+# Request validation
+validate_request: true
+
+# GDPR / CCPA
+gdpr:
+  enabled: false
+  default_value: "1"
+ccpa:
+  enforce: false
+
+# Publisher whitelisting (managed via API)
+account_defaults:
+  events_enabled: true
+  price_floors:
+    enabled: true

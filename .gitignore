@@ -1,0 +1,24 @@
+# Secrets – never commit
+.env
+nginx/certs/
+*.pem
+*.key
+*.crt
+
+# Node
+node_modules/
+*/node_modules/
+
+# React builds
+*/build/
+
+# Go binaries
+prebid-server/prebid-server
+
+# Logs
+backend/logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
