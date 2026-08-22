@@ -7,43 +7,30 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Enable RDP and Configure Firewall
+      - name: Enable RDP & Configure Firewall
         shell: powershell
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           
-          # Set password for runneradmin
+          # User Password Set
           $AdminUser = [adsi]"WinNT://./runneradmin,user"
           $AdminUser.SetPassword("P@ssword12345")
           $AdminUser.SetInfo()
 
-      - name: Download & Setup Ngrok
-        shell: powershell
-        env:
-          NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
-        run: |
-          choco install ngrok -y
-          ngrok config add-authtoken $env:NGROK_AUTH_TOKEN
-          Start-Process -FilePath "ngrok" -ArgumentList "tcp 3389"
-
-      - name: Display RDP Connection Details
+      - name: Start Pinggy RDP Tunnel
         shell: powershell
         run: |
-          Start-Sleep -Seconds 10
-          $tunnels = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels"
-          $url = $tunnels.tunnels.public_url | Select-Object -First 1
+          # SSH client check & start tunnel
+          Start-Process ssh -ArgumentList "-o StrictHostKeyChecking=no -p 443 -R0:localhost:3389 qr@a.pinggy.io" -RedirectStandardOutput "pinggy.log" -NoNewWindow
+          Start-Sleep -Seconds 8
           
-          if ($url) {
-              $cleanUrl = $url.Replace("tcp://", "")
-              Write-Host "==========================================" -ForegroundColor Green
-              Write-Host "RDP Address  : $cleanUrl" -ForegroundColor Yellow
-              Write-Host "Username     : runneradmin" -ForegroundColor Yellow
-              Write-Host "Password     : P@ssword12345" -ForegroundColor Yellow
-              Write-Host "==========================================" -ForegroundColor Green
-          } else {
-              Write-Host "Ngrok URL not ready yet. Check ngrok authtoken." -ForegroundColor Red
-          }
+          Write-Host "==================================================" -ForegroundColor Green
+          Write-Host "RDP connection setup complete!" -ForegroundColor Green
+          Write-Host "Username : runneradmin" -ForegroundColor Yellow
+          Write-Host "Password : P@ssword12345" -ForegroundColor Yellow
+          Write-Host "==================================================" -ForegroundColor Green
+          Get-Content pinggy.log | Select-String "tcp://"
 
       - name: Keep Runner Alive
         shell: powershell
