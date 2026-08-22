@@ -1,0 +1,16 @@
+name: Temporary VPS Runner
+
+on:
+  workflow_dispatch: # Actions tab se manual run karne ke lye
+
+jobs:
+  run-vps:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup SSH / Web Terminal with Tmate
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: false # Agar private repo ho toh access restrict karne ke lye true rakhein
