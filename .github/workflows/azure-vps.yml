@@ -7,34 +7,40 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Enable RDP & Configure Firewall
+      - name: Configure RDP & Disable NLA
         shell: powershell
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           
-          # Admin password set
+          # Admin Password Setup
           $AdminUser = [adsi]"WinNT://./runneradmin,user"
           $AdminUser.SetPassword("P@ssword12345")
           $AdminUser.SetInfo()
 
-      - name: Download & Start Cloudflare Tunnel
+      - name: Install and Connect Tailscale
+        shell: powershell
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        run: |
+          choco install tailscale -y
+          $env:Path += ";C:\Program Files\Tailscale"
+          tailscale up --auth-key=$env:TAILSCALE_AUTHKEY --unattended --accept-risk=all
+
+      - name: Display Connection Info
         shell: powershell
         run: |
-          Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "cloudflared.exe"
-          Start-Process -FilePath ".\cloudflared.exe" -ArgumentList "tunnel --url rdp://localhost:3389" -RedirectStandardOutput "cloudflared.log" -RedirectStandardError "cloudflared.err" -NoNewWindow
-          
-          Start-Sleep -Seconds 10
-          
-          Write-Host "==================================================" -ForegroundColor Green
-          Write-Host "RDP Setup Complete via Cloudflare!" -ForegroundColor Green
-          Write-Host "Username : runneradmin" -ForegroundColor Yellow
-          Write-Host "Password : P@ssword12345" -ForegroundColor Yellow
-          Write-Host "==================================================" -ForegroundColor Green
-          
-          Get-Content cloudflared.err | Select-String "trycloudflare.com"
+          $env:Path += ";C:\Program Files\Tailscale"
+          Start-Sleep -Seconds 5
+          $ip = (tailscale ip -4)
+          Write-Host "==========================================" -ForegroundColor Green
+          Write-Host "Tailscale IP : $ip" -ForegroundColor Yellow
+          Write-Host "Username     : runneradmin" -ForegroundColor Yellow
+          Write-Host "Password     : P@ssword12345" -ForegroundColor Yellow
+          Write-Host "==========================================" -ForegroundColor Green
 
-      - name: Keep Runner Alive
+      - name: Keep Alive
         shell: powershell
         run: |
           $i = 0
